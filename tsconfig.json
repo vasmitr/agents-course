@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "module": "nodenext",
+    "moduleResolution": "nodenext",
     "target": "esnext",
     "types": ["node", "vite/client"],
     "sourceMap": false,
@@ -18,7 +19,7 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@core/*": ["./packages/core/src/*"]
+      "@packages/core/": ["./packages/core"],
     }
   }
 }

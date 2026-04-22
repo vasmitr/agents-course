@@ -1,6 +1,13 @@
 {
-  "name": "core",
+  "name": "@packages/core",
   "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -9,5 +16,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.30.3"
+  "packageManager": "pnpm@10.30.3",
+  "dependencies": {
+    "ollama": "^0.6.3",
+    "rxjs": "^7.8.2"
+  }
 }
