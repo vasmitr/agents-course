@@ -1,4 +1,18 @@
-import Rx from "rxjs";
+import {
+  concatMap,
+  defer,
+  distinctUntilChanged,
+  filter,
+  finalize,
+  from,
+  map,
+  mergeMap,
+  reduce,
+  scan,
+  shareReplay,
+  Subject,
+  tap
+} from "rxjs";
 import ollama, { ChatResponse } from "ollama";
 
 // 1. Manage history state
@@ -20,7 +34,7 @@ const initialState: State = {
   history: []
 };
 
-const messageAction$ = new Rx.Subject<Message>();
+const messageAction$ = new Subject<Message>();
 
 export const postMessage = (message: BaseMessage) =>
   messageAction$.next({
@@ -31,14 +45,14 @@ export const postMessage = (message: BaseMessage) =>
 
 export const state$ = messageAction$.pipe(
   // On each event, notify subscribers with new copy of history state
-  Rx.scan(
+  scan(
     (state: State, message) => ({
       ...state,
       history: [...state.history, message]
     }),
     initialState
   ),
-  Rx.shareReplay(1)
+  shareReplay(1)
 );
 
 // 2.  Call llm and stream response
@@ -58,8 +72,8 @@ const transformResponsePart = (part: ChatResponse): ModelPartialUpdate => {
 
 export const fetchOllama$ = (context: string) =>
   // Convert async generator to an observable
-  Rx.defer(() =>
-    Rx.from(
+  defer(() =>
+    from(
       ollama.chat({
         model: OLLAMA_MODEL,
         messages: [{ role: "user", content: context }],
@@ -68,25 +82,25 @@ export const fetchOllama$ = (context: string) =>
     )
   ).pipe(
     // Stream each token
-    Rx.mergeMap((res: AsyncIterable<ChatResponse>) => Rx.from(res)),
+    mergeMap((res: AsyncIterable<ChatResponse>) => from(res)),
     // return { thinking, content };
-    Rx.map(transformResponsePart)
+    map(transformResponsePart)
   );
 
 // 3. React to the user message
 export const cleanupStreamTokens = () => {
   thinkingSubject$.next("");
-  activeContentSubject$.next("");
+  writingSubject$.next("");
 };
 
 export const streamResponseTokens = (res: ModelPartialUpdate) => {
   thinkingSubject$.next(res.thinking);
-  activeContentSubject$.next(res.content);
+  writingSubject$.next(res.content);
 };
 
 // Streaming state
-export const thinkingSubject$ = new Rx.Subject<string>();
-export const activeContentSubject$ = new Rx.Subject<string>();
+export const thinkingSubject$ = new Subject<string>();
+export const writingSubject$ = new Subject<string>();
 
 export const buildContext = (history: Message[]) => {
   return [...history.map((m) => `${m.role.toUpperCase()}: ${m.content}`)].join(
@@ -97,18 +111,18 @@ export const buildContext = (history: Message[]) => {
 state$
   .pipe(
     // We only want to react on user's message
-    Rx.filter((state) => state.history.at(-1)?.role === "user"),
+    filter((state) => state.history.at(-1)?.role === "user"),
     // Process history into context
-    Rx.map((state) => buildContext(state.history)),
+    map((state) => buildContext(state.history)),
     // For each user message found, call LLM
-    Rx.concatMap((context) => {
+    concatMap((context) => {
       return fetchOllama$(context).pipe(
         // Stream tokens for UI
-        Rx.tap(streamResponseTokens),
-        Rx.finalize(cleanupStreamTokens),
+        tap(streamResponseTokens),
+        finalize(cleanupStreamTokens),
         // Build finalMessage from response tokens
-        Rx.reduce((acc, res) => acc + res.content, ""),
-        Rx.tap((finalMessage) =>
+        reduce((acc, res) => acc + res.content, ""),
+        tap((finalMessage) =>
           postMessage({
             role: "agent",
             content: finalMessage
@@ -118,3 +132,11 @@ state$
     })
   )
   .subscribe();
+
+export function onMessage$(role: Message["role"]) {
+  return state$.pipe(
+    map((s) => s.history.at(-1)),
+    distinctUntilChanged((a, b) => a?.id === b?.id),
+    filter((m) => m?.role === role)
+  );
+}
