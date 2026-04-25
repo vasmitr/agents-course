@@ -5,6 +5,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "pnpm --filter @apps/ui start",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,6 +15,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "eslint": "^10.2.1",
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.3",
+    "tsx": "^4.21.0"
   }
 }
