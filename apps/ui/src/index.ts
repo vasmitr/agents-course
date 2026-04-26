@@ -1,3 +1,4 @@
+import readline from "node:readline/promises";
 import {
   buffer,
   bufferTime,
@@ -12,13 +13,13 @@ import {
   takeUntil,
   tap
 } from "rxjs";
+import { onMessage$ } from "@packages/core/helpers";
 import {
-  writingSubject$,
+  Message,
   postMessage,
   thinkingSubject$,
-  onMessage$
+  writingSubject$
 } from "@packages/core";
-import readline from "node:readline/promises";
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -91,4 +92,7 @@ turnStart$
 
 const tools$ = onMessage$("tool");
 
-tools$.subscribe((res) => process.stdout.write(`\x1b[36m${res?.content}\n\n`));
+tools$.subscribe((res: Message) => {
+  process.stdout.write(`\x1b[36m${res?.content}\n\n`);
+  process.stdout.write("\x1b[38;5;255mAgent is thinking...\n");
+});

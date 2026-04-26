@@ -19,7 +19,8 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@packages/core/": ["./packages/core"],
+	"@packages/core/": ["./packages/core"],
+	"@packages/core/helpers": ["./packages/core/src/helpers/index.ts"]
     }
   }
 }
