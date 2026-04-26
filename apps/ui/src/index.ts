@@ -6,6 +6,7 @@ import {
   finalize,
   fromEvent,
   map,
+  merge,
   switchMap,
   take,
   takeUntil,
@@ -27,7 +28,7 @@ const rl = readline.createInterface({
 const input$ = fromEvent<string>(rl, "line");
 
 const done$ = input$.pipe(
-  bufferTime(100), // Handle paste
+  bufferTime(500), // Handle paste
   filter((lines) => lines.at(-1)?.trim() === "") // handle double RETURN
 );
 
@@ -50,7 +51,7 @@ defer(() => {
   );
 }).subscribe();
 
-const turnStart$ = onMessage$("user");
+const turnStart$ = merge(onMessage$("user"), onMessage$("tool"));
 const turnEnd$ = onMessage$("agent");
 
 turnStart$
@@ -87,3 +88,7 @@ turnStart$
     )
   )
   .subscribe();
+
+const tools$ = onMessage$("tool");
+
+tools$.subscribe((res) => process.stdout.write(`\x1b[36m${res?.content}\n\n`));
