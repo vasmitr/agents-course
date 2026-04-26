@@ -2,10 +2,13 @@ import {
   buffer,
   bufferTime,
   defer,
+  distinctUntilChanged,
   filter,
   finalize,
+  first,
   fromEvent,
   map,
+  startWith,
   switchMap,
   take,
   takeUntil,
@@ -34,11 +37,9 @@ const done$ = input$.pipe(
 defer(() => {
   rl.setPrompt("\x1b[38;5;46m>>> \x1b[38;5;255m");
   rl.prompt();
-
   return input$.pipe(
     tap(() => {
-      rl.setPrompt("\x1b[37m...\n\x1b[38;5;255m");
-      rl.prompt();
+      process.stdout.write("\x1b[37m...\n\x1b[38;5;255m");
     }),
     buffer(done$),
     map((msg: string[]) => msg.join("\n")),
@@ -47,8 +48,7 @@ defer(() => {
         role: "user",
         content
       });
-      rl.setPrompt("\x1b[38;5;46m>>> \x1b[38;5;255m");
-      rl.prompt();
+      process.stdout.write("\x1b[38;5;255mAgent is thinking...\n");
     })
   );
 }).subscribe();
@@ -67,7 +67,9 @@ turnStart$
           )
         ),
         tap((tokens) => process.stdout.write(`\x1b[37m${tokens}`)),
-        finalize(() => process.stdout.write(`\x1b[37m\n*End of thinking*\n\n`))
+        finalize(() => {
+          process.stdout.write("\n\n\x1b[38;5;255mAgent is typing...\n");
+        })
       )
     )
   )
@@ -81,6 +83,7 @@ turnStart$
         tap((tokens) => process.stdout.write(`\x1b[38;5;12m${tokens}`)),
         finalize(() => {
           process.stdout.write(`\n\n`);
+          rl.setPrompt("\x1b[38;5;46m>>> \x1b[38;5;255m");
           rl.prompt();
         })
       )
