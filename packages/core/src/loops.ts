@@ -30,15 +30,11 @@ export const agentLoop$ = state$.pipe(
   filter((state) =>
     ["user", "tool"].includes(state.history.at(-1)?.role || "")
   ),
-  // Process history into context
   map((state) => buildContext(state.history)),
-  // For each user message found, call LLM
   concatMap((context) => {
     return fetchOllama$(context).pipe(
-      // Stream tokens for UI
       tap(streamResponseTokens),
       finalize(cleanupStreamTokens),
-      // Build finalMessage from response tokens
       reduce((acc, res) => acc + res.content, ""),
       tap((finalMessage) =>
         postMessage({

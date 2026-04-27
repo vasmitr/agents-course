@@ -50,7 +50,10 @@ export const executeTool$ = (props: ExecuteToolProps) => {
 
   return defer(() =>
     from(tool.execute(data)).pipe(
-      map((res) => JSON.stringify(res || {})),
+      map(
+        (res) =>
+          `${tool.name}: ${JSON.stringify(data)}\n${JSON.stringify(res || {})}`
+      ),
       map((res) => ({
         role: "tool" as const,
         content: res

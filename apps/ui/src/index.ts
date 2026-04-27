@@ -92,7 +92,10 @@ turnStart$
 
 const tools$ = onMessage$("tool");
 
-tools$.subscribe((res: Message) => {
-  process.stdout.write(`\x1b[36m${res?.content}\n\n`);
+tools$.pipe(filter((res) => !!res)).subscribe((res) => {
+  const content = res.content?.slice(0, 100);
+
+  process.stdout.write(`\r\x1b[38;5;255mTool Call\n`);
+  process.stdout.write(`\x1b[36m${content}\n...\n\n`);
   process.stdout.write("\x1b[38;5;255mAgent is thinking...\n");
 });
