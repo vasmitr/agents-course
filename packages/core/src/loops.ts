@@ -7,7 +7,8 @@ import {
   of,
   map,
   reduce,
-  tap
+  tap,
+  Observable
 } from "rxjs";
 import {
   executeTool$,
@@ -17,53 +18,49 @@ import {
   processToolCallMatches,
   validateToolArgs
 } from "./helpers/tools.js";
-import {
-  cleanupStreamTokens,
-  state$,
-  streamResponseTokens,
-  postMessage
-} from "./store.js";
+import { cleanupStreamTokens, streamResponseTokens } from "./store.js";
 import { buildContext } from "./helpers/context.js";
-import { fetchOllama$ } from "./model.js";
+import { BaseMessage, ModelPartialUpdate, State } from "./types.js";
 
-export const agentLoop$ = state$.pipe(
-  filter((state) =>
-    ["user", "tool"].includes(state.history.at(-1)?.role || "")
-  ),
-  map((state) => buildContext(state.history)),
-  concatMap((context) => {
-    return fetchOllama$(context).pipe(
-      tap(streamResponseTokens),
-      finalize(cleanupStreamTokens),
-      reduce((acc, res) => acc + res.content, ""),
-      tap((finalMessage) =>
-        postMessage({
-          role: "agent",
-          content: finalMessage
-        })
-      )
-    );
-  })
-);
-
-export const toolLoop$ = state$.pipe(
-  filter((state) => state.history.at(-1)?.role === "agent"),
-  map((state) => state.history.at(-1)!.content),
-  concatMap((content) => from(extractToolCallsFromMessage(content))),
-  map(processToolCallMatches),
-  concatMap((jsonStr) =>
-    of(jsonStr).pipe(
-      map(parseCall),
-      map(getToolByCall),
-      map(validateToolArgs),
-      concatMap(executeTool$),
-      catchError((err) =>
-        of({
-          role: "tool" as const,
-          content: JSON.stringify(err || {})
-        })
+export const createAgentLoop$ = (
+  state$: Observable<State>,
+  fetchModel$: (ctx: string) => Observable<ModelPartialUpdate>
+): Observable<BaseMessage> =>
+  state$.pipe(
+    filter((state) =>
+      ["user", "tool"].includes(state.history.at(-1)?.role || "")
+    ),
+    map((state) => buildContext(state.history)),
+    concatMap((context) =>
+      fetchModel$(context).pipe(
+        tap(streamResponseTokens),
+        finalize(cleanupStreamTokens),
+        reduce((acc, res) => acc + res.content, ""),
+        map((content) => ({ role: "agent" as const, content }))
       )
     )
-  ),
-  tap(postMessage)
-);
+  );
+
+export const createToolLoop$ = (
+  state$: Observable<State>
+): Observable<BaseMessage> =>
+  state$.pipe(
+    filter((state) => state.history.at(-1)?.role === "agent"),
+    map((state) => state.history.at(-1)!.content),
+    concatMap((content) => from(extractToolCallsFromMessage(content))),
+    map(processToolCallMatches),
+    concatMap((jsonStr) =>
+      of(jsonStr).pipe(
+        map(parseCall),
+        map(getToolByCall),
+        map(validateToolArgs),
+        concatMap(executeTool$),
+        catchError((err) =>
+          of({
+            role: "tool" as const,
+            content: err.message
+          })
+        )
+      )
+    )
+  );

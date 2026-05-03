@@ -1,10 +1,10 @@
-import { filter, tap } from "rxjs";
-import { onMessage$ } from "@packages/core/helpers";
+import { filter, tap, Observable } from "rxjs";
+import type { Message } from "@packages/core";
 import { COLORS } from "../colors.js";
 
-export function getToolMessageStream() {
-  return onMessage$("tool").pipe(
-    filter((res) => !!res),
+export function getToolMessageStream(toolMessage$: Observable<Message | undefined>) {
+  return toolMessage$.pipe(
+    filter((res): res is Message => !!res),
     tap((res) => {
       const content = res.content?.slice(0, 100);
       process.stdout.write(`\r${COLORS.white}Tool Call\n`);

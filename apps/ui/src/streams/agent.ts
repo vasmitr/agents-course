@@ -1,38 +1,35 @@
-import { filter, finalize, merge, take, takeUntil, tap, switchMap, Subject } from "rxjs";
-import { thinkingSubject$, writingSubject$ } from "@packages/core";
-import { onMessage$ } from "@packages/core/helpers";
-import { UIState, ChatMode } from "../types.js";
+import { filter, finalize, merge, take, takeUntil, tap, switchMap, Observable } from "rxjs";
 import { COLORS } from "../colors.js";
 
 export function getAgentStream(
-  state$: Subject<UIState>,
-  getChatState: () => ChatMode
+  thinking$: Observable<string>,
+  writing$: Observable<string>,
+  turnStart$: Observable<unknown>,
+  turnEnd$: Observable<unknown>,
+  onTurnEnd: () => void
 ) {
-  const turnStart$ = merge(onMessage$("user"), onMessage$("tool"));
-  const turnEnd$ = onMessage$("agent");
-
-  const thinking$ = turnStart$.pipe(
+  const thinkingStream$ = turnStart$.pipe(
     switchMap(() =>
-      thinkingSubject$.pipe(
-        takeUntil(writingSubject$.pipe(filter((t) => !!t), take(1))),
+      thinking$.pipe(
+        takeUntil(writing$.pipe(filter((t) => !!t), take(1))),
         tap((tokens) => process.stdout.write(`${COLORS.dim}${tokens}`)),
         finalize(() => process.stdout.write(`\n\n${COLORS.white}Agent is typing...\n`))
       )
     )
   );
 
-  const writing$ = turnStart$.pipe(
+  const writingStream$ = turnStart$.pipe(
     switchMap(() =>
-      writingSubject$.pipe(
+      writing$.pipe(
         takeUntil(turnEnd$),
         tap((tokens) => process.stdout.write(`${COLORS.blue}${tokens}`)),
         finalize(() => {
           process.stdout.write("\n\n");
-          state$.next(getChatState());
+          onTurnEnd();
         })
       )
     )
   );
 
-  return merge(thinking$, writing$);
+  return merge(thinkingStream$, writingStream$);
 }

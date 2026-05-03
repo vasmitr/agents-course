@@ -1,6 +1,7 @@
 import readline from "node:readline/promises";
 import { fromEvent, merge, Observable, Subject, BehaviorSubject, takeUntil } from "rxjs";
-import { core$ } from "@packages/core";
+import { core$, thinkingSubject$, writingSubject$ } from "@packages/core";
+import { onMessage$ } from "@packages/core/helpers";
 import { UIState, ChatMode } from "./types.js";
 import { COLORS } from "./colors.js";
 import { getInputStreamStream } from "./streams/input.js";
@@ -29,11 +30,20 @@ class TerminalUI {
   }
 
   public start() {
+    const turnStart$ = merge(onMessage$("user"), onMessage$("tool"));
+    const turnEnd$ = onMessage$("agent");
+
     merge(
       core$,
       getInputStreamStream(this.input$, this.state$, this.rl),
-      getAgentStream(this.state$, this.getChatState.bind(this)),
-      getToolMessageStream()
+      getAgentStream(
+        thinkingSubject$,
+        writingSubject$,
+        turnStart$,
+        turnEnd$,
+        () => this.state$.next(this.getChatState())
+      ),
+      getToolMessageStream(onMessage$("tool"))
     )
       .pipe(takeUntil(this.destroy$))
       .subscribe();
