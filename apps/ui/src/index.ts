@@ -1,101 +1,50 @@
 import readline from "node:readline/promises";
-import {
-  buffer,
-  bufferTime,
-  defer,
-  filter,
-  finalize,
-  fromEvent,
-  map,
-  merge,
-  switchMap,
-  take,
-  takeUntil,
-  tap
-} from "rxjs";
-import { onMessage$ } from "@packages/core/helpers";
-import {
-  Message,
-  postMessage,
-  thinkingSubject$,
-  writingSubject$
-} from "@packages/core";
+import { fromEvent, merge, Observable, Subject, BehaviorSubject, takeUntil } from "rxjs";
+import { core$ } from "@packages/core";
+import { UIState, ChatMode } from "./types.js";
+import { COLORS } from "./colors.js";
+import { getInputStreamStream } from "./streams/input.js";
+import { getAgentStream } from "./streams/agent.js";
+import { getToolMessageStream } from "./streams/tool.js";
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+class TerminalUI {
+  private rl: readline.Interface;
+  private state$ = new BehaviorSubject<UIState>(this.getChatState());
+  private destroy$ = new Subject<void>();
+  private input$: Observable<string>;
 
-const input$ = fromEvent<string>(rl, "line");
+  constructor() {
+    this.rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    this.input$ = fromEvent<string>(this.rl, "line");
+  }
 
-const done$ = input$.pipe(
-  bufferTime(500), // Handle paste
-  filter((lines) => lines.at(-1)?.trim() === "") // handle double RETURN
-);
+  private getChatState(): ChatMode {
+    return {
+      mode: "CHAT",
+      prompt: `${COLORS.green}>>> ${COLORS.white}`
+    };
+  }
 
-defer(() => {
-  rl.setPrompt("\x1b[38;5;46m>>> \x1b[38;5;255m");
-  rl.prompt();
-  return input$.pipe(
-    tap(() => {
-      process.stdout.write("\x1b[37m...\n\x1b[38;5;255m");
-    }),
-    buffer(done$),
-    map((msg: string[]) => msg.join("\n")),
-    tap((content: string) => {
-      postMessage({
-        role: "user",
-        content
-      });
-      process.stdout.write("\x1b[38;5;255mAgent is thinking...\n");
-    })
-  );
-}).subscribe();
-
-const turnStart$ = merge(onMessage$("user"), onMessage$("tool"));
-const turnEnd$ = onMessage$("agent");
-
-turnStart$
-  .pipe(
-    switchMap(() =>
-      thinkingSubject$.pipe(
-        takeUntil(
-          writingSubject$.pipe(
-            filter((t) => !!t),
-            take(1)
-          )
-        ),
-        tap((tokens) => process.stdout.write(`\x1b[37m${tokens}`)),
-        finalize(() => {
-          process.stdout.write("\n\n\x1b[38;5;255mAgent is typing...\n");
-        })
-      )
+  public start() {
+    merge(
+      core$,
+      getInputStreamStream(this.input$, this.state$, this.rl),
+      getAgentStream(this.state$, this.getChatState.bind(this)),
+      getToolMessageStream()
     )
-  )
-  .subscribe();
+      .pipe(takeUntil(this.destroy$))
+      .subscribe();
+  }
 
-turnStart$
-  .pipe(
-    switchMap(() =>
-      writingSubject$.pipe(
-        takeUntil(turnEnd$),
-        tap((tokens) => process.stdout.write(`\x1b[38;5;12m${tokens}`)),
-        finalize(() => {
-          process.stdout.write(`\n\n`);
-          rl.setPrompt("\x1b[38;5;46m>>> \x1b[38;5;255m");
-          rl.prompt();
-        })
-      )
-    )
-  )
-  .subscribe();
+  public destroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.rl.close();
+  }
+}
 
-const tools$ = onMessage$("tool");
-
-tools$.pipe(filter((res) => !!res)).subscribe((res) => {
-  const content = res.content?.slice(0, 100);
-
-  process.stdout.write(`\r\x1b[38;5;255mTool Call\n`);
-  process.stdout.write(`\x1b[36m${content}\n...\n\n`);
-  process.stdout.write("\x1b[38;5;255mAgent is thinking...\n");
-});
+const terminal = new TerminalUI();
+terminal.start();
